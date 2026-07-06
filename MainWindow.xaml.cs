@@ -7,13 +7,11 @@ using System.Windows.Controls;
 using System.Windows.Forms;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
 using System.Windows.Interop;
 using Orientation = System.Windows.Controls.Orientation;
 using Color = System.Windows.Media.Color;
 using Colors = System.Windows.Media.Colors;
-using Point = System.Windows.Point;
 
 namespace lunsyn;
 
@@ -78,67 +76,58 @@ public partial class MainWindow : Window
         catch { /* 非 Win10+ 回退 */ }
     }
 
-    // ========== 边缘吸附 ==========
+    // ========== 边缘吸附（支持多屏 + 可拖离） ==========
 
-    private bool _isDragging;
-    private Point _dragOffset;
+    private double _dragStartLeft, _dragStartTop;
     private const int SnapThreshold = 25;
+    private const int UnsnapOffset = 30; // 解吸附时向内偏移
 
     private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
         if (e.ClickCount == 2) return;
-        _isDragging = true;
-        _dragOffset = e.GetPosition(this);
-        ((Border)sender).CaptureMouse();
-    }
 
-    private void Header_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (!_isDragging || e.LeftButton != MouseButtonState.Pressed) return;
+        // 如果窗口已吸附在边缘，先解吸附
+        var screen = GetCurrentScreen();
+        var working = screen.WorkingArea;
+        if (Math.Abs(Left - working.Left) < 2)
+            Left = working.Left + UnsnapOffset;
+        else if (Math.Abs(Left + Width - working.Right) < 2)
+            Left = working.Right - Width - UnsnapOffset;
+        if (Math.Abs(Top - working.Top) < 2)
+            Top = working.Top + UnsnapOffset;
 
-        var screenPos = PointToScreen(e.GetPosition(this));
-        Left = screenPos.X - _dragOffset.X;
-        Top = screenPos.Y - _dragOffset.Y;
-    }
+        _dragStartLeft = Left;
+        _dragStartTop = Top;
 
-    private void Header_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
-    {
-        _isDragging = false;
-        ((Border)sender).ReleaseMouseCapture();
+        // 使用 WPF 内置 DragMove，不会产生动画锁问题
+        DragMove();
+
+        // 拖动结束后，判断是否需要吸附
+        if (Math.Abs(Left - _dragStartLeft) < 3 && Math.Abs(Top - _dragStartTop) < 3)
+            return;
+
         SnapToEdge();
+    }
+
+    /// 获取窗口当前所在屏幕（支持多屏，包括副屏）
+    private Screen GetCurrentScreen()
+    {
+        var center = new System.Drawing.Point((int)(Left + Width / 2), (int)(Top + Height / 2));
+        return Screen.FromPoint(center);
     }
 
     private void SnapToEdge()
     {
-        var screen = Screen.FromHandle(new WindowInteropHelper(this).Handle);
+        var screen = GetCurrentScreen();
         var working = screen.WorkingArea;
-        double targetX = Left, targetY = Top;
 
         if (Math.Abs(Left - working.Left) < SnapThreshold)
-            targetX = working.Left;
+            Left = working.Left;
         else if (Math.Abs(Left + Width - working.Right) < SnapThreshold)
-            targetX = working.Right - Width;
+            Left = working.Right - Width;
 
         if (Math.Abs(Top - working.Top) < SnapThreshold)
-            targetY = working.Top;
-        else if (Math.Abs(Top + Height - working.Bottom) < SnapThreshold)
-            targetY = working.Bottom - Height;
-
-        if (Math.Abs(targetX - Left) > 1 || Math.Abs(targetY - Top) > 1)
-        {
-            AnimateWindow(targetX, targetY);
-        }
-    }
-
-    private void AnimateWindow(double toX, double toY)
-    {
-        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
-        var duration = new Duration(TimeSpan.FromMilliseconds(180));
-
-        if (Math.Abs(toX - Left) > 1)
-            BeginAnimation(LeftProperty, new DoubleAnimation(toX, duration) { EasingFunction = ease });
-        if (Math.Abs(toY - Top) > 1)
-            BeginAnimation(TopProperty, new DoubleAnimation(toY, duration) { EasingFunction = ease });
+            Top = working.Top;
     }
 
     // ========== 核心功能 ==========
