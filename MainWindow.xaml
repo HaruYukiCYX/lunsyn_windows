@@ -14,7 +14,6 @@
 
     <Window.Resources>
         <Color x:Key="AccentBlue">#3B82F6</Color>
-        <Color x:Key="AccentCyan">#06B6D4</Color>
         <Color x:Key="AccentGreen">#10B981</Color>
         <Color x:Key="AccentRed">#EF4444</Color>
         <Color x:Key="TextPrimary">#1E293B</Color>
@@ -29,9 +28,6 @@
         <SolidColorBrush x:Key="CardBgBrush" Color="{StaticResource CardBg}"/>
         <SolidColorBrush x:Key="BorderLightBrush" Color="{StaticResource BorderLight}"/>
 
-        <DropShadowEffect x:Key="CardShadow" BlurRadius="8" ShadowDepth="0" Opacity="0.06" Color="#000000"/>
-        <DropShadowEffect x:Key="CardShadowHover" BlurRadius="12" ShadowDepth="0" Opacity="0.10" Color="#000000"/>
-
         <Style x:Key="PrimaryBtn" TargetType="Button">
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Foreground" Value="#FFFFFF"/>
@@ -41,8 +37,7 @@
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="border" Background="#3B82F6"
-                                CornerRadius="6" Padding="10,5"
-                                BorderThickness="0">
+                                CornerRadius="6" Padding="10,5" BorderThickness="0">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -118,7 +113,6 @@
         </Style>
     </Window.Resources>
 
-    <!-- 主容器 -->
     <Border x:Name="MainBorder" CornerRadius="12" ClipToBounds="True"
             Background="#D9F8FAFC" BorderBrush="#40E2E8F0" BorderThickness="1">
         <Grid>
@@ -127,16 +121,13 @@
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
-            <!-- 标题栏 -->
-            <Border Grid.Row="0" Height="36"
-                    Background="Transparent"
+            <Border Grid.Row="0" Height="36" Background="Transparent"
                     MouseLeftButtonDown="Header_MouseLeftButtonDown"
                     MouseMove="Header_MouseMove"
                     MouseLeftButtonUp="Header_MouseLeftButtonUp">
                 <Grid Margin="12,0">
                     <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock x:Name="TitleEmoji" Text="🌙" FontSize="16"
-                                   VerticalAlignment="Center"/>
+                        <TextBlock x:Name="TitleEmoji" Text="🌙" FontSize="16" VerticalAlignment="Center"/>
                         <TextBlock x:Name="TitleText" Text="望月" FontSize="12"
                                    FontWeight="SemiBold" Foreground="#1E293B"
                                    VerticalAlignment="Center" Margin="6,0,0,0"/>
@@ -152,12 +143,10 @@
                 </Grid>
             </Border>
 
-            <!-- 内容 -->
             <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="10,0,10,8">
 
-                    <!-- 状态卡片 -->
                     <Border CornerRadius="10" Padding="12,12"
                             Background="{StaticResource CardBgBrush}"
                             BorderBrush="{StaticResource BorderLightBrush}"
@@ -181,7 +170,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 我的活动 -->
                     <Border CornerRadius="10" Padding="12,12"
                             Background="{StaticResource CardBgBrush}"
                             BorderBrush="{StaticResource BorderLightBrush}"
@@ -191,8 +179,7 @@
                         </Border.Effect>
                         <StackPanel>
                             <TextBlock Text="📋 我的活动" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,0,0,8"/>
+                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
                             <StackPanel x:Name="MyActivityPanel"/>
                             <TextBlock x:Name="MyActivityEmpty" Text="等待检测..."
                                        FontSize="11" Foreground="{StaticResource TextMutedBrush}"
@@ -200,7 +187,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- TA 的活动 -->
                     <Border CornerRadius="10" Padding="12,12"
                             Background="{StaticResource CardBgBrush}"
                             BorderBrush="{StaticResource BorderLightBrush}"
@@ -215,20 +201,38 @@
                             <TextBlock x:Name="FriendEmptyText" Text="好友暂未连接"
                                        FontSize="11" Foreground="{StaticResource TextMutedBrush}"
                                        Visibility="Visible"/>
+
+                            <!-- 连接控制 -->
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                                 <Ellipse x:Name="SyncDot" Style="{StaticResource StatusDot}"
                                          Fill="{StaticResource TextMutedBrush}"/>
                                 <TextBlock x:Name="SyncStatusLabel" Text="未连接"
                                            FontSize="10" Foreground="{StaticResource TextMutedBrush}"
                                            VerticalAlignment="Center"/>
-                                <Button x:Name="SyncBtn" Content="连接好友"
+                                <Button x:Name="SyncBtn" Content="自动连接"
                                         Style="{StaticResource PrimaryBtn}" Margin="10,0,0,0"
                                         Click="SyncBtn_Click"/>
+                                <Button x:Name="ManualIPBtn" Content="手动 IP"
+                                        Style="{StaticResource OutlineBtn}" Margin="4,0,0,0"
+                                        Click="ManualIPBtn_Click"/>
+                            </StackPanel>
+
+                            <!-- 手动 IP 输入（默认隐藏） -->
+                            <StackPanel x:Name="ManualIPPanel" Visibility="Collapsed" Margin="0,6,0,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBox x:Name="IPTextBox" Width="120" FontSize="11"
+                                             Padding="4,2" Margin="0,0,4,0"
+                                             Text="192.168."/>
+                                    <Button Content="连接" Style="{StaticResource PrimaryBtn}"
+                                            Padding="10,4" Click="IPConnectBtn_Click"/>
+                                    <Button Content="取消" Style="{StaticResource GhostBtn}"
+                                            Foreground="#94A3B8" Padding="6,4"
+                                            Click="IPCancenBtn_Click"/>
+                                </StackPanel>
                             </StackPanel>
                         </StackPanel>
                     </Border>
 
-                    <!-- 屏幕共享 -->
                     <Border CornerRadius="10" Padding="12,12"
                             Background="{StaticResource CardBgBrush}"
                             BorderBrush="{StaticResource BorderLightBrush}"
@@ -238,11 +242,9 @@
                         </Border.Effect>
                         <StackPanel>
                             <TextBlock Text="🖥️ 屏幕共享" FontSize="11" FontWeight="SemiBold"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       Margin="0,0,0,8"/>
+                                       Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,8"/>
                             <Image x:Name="RemoteFrameImage" MaxHeight="120"
-                                   Stretch="Uniform" Visibility="Collapsed"
-                                   Margin="0,0,0,6"/>
+                                   Stretch="Uniform" Visibility="Collapsed" Margin="0,0,0,6"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <Ellipse x:Name="ScreenDot" Style="{StaticResource StatusDot}"
                                          Fill="{StaticResource TextMutedBrush}"/>
@@ -265,11 +267,9 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- 分享 -->
                     <Button x:Name="ShareBtn" Content="💬 复制状态到剪贴板"
                             Style="{StaticResource PrimaryBtn}"
-                            HorizontalAlignment="Stretch"
-                            Click="ShareBtn_Click"/>
+                            HorizontalAlignment="Stretch" Click="ShareBtn_Click"/>
 
                 </StackPanel>
             </ScrollViewer>

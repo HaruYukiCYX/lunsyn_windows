@@ -39,20 +39,28 @@ public class ActivitySyncService : IDisposable
         SetState(ConnectionStateEnum.Connecting);
         _running = true;
 
-        // 先尝试搜索已有服务端
         var results = await ZeroconfResolver.ResolveAsync("_lunsynchat._tcp", TimeSpan.FromSeconds(3));
         var host = results.FirstOrDefault();
 
         if (host != null)
         {
             System.Console.WriteLine($"[望月] 找到服务端: {host.IPAddress}");
-            await ConnectAsClientAsync(host.IPAddress);
+            await ConnectAsync(host.IPAddress, Port);
         }
         else
         {
             System.Console.WriteLine("[望月] 启动活动同步服务端 (TCP)...");
             await StartServerAsync();
         }
+    }
+
+    /// 手动连接指定 IP（用于跨平台连接 macOS 端）
+    public async Task ConnectAsync(string host, int port = Port)
+    {
+        if (ConnectionState != ConnectionStateEnum.Disconnected) return;
+        SetState(ConnectionStateEnum.Connecting);
+        _running = true;
+        await ConnectAsClientAsync(host, port);
     }
 
     private async Task StartServerAsync()
@@ -67,10 +75,10 @@ public class ActivitySyncService : IDisposable
         _ = Task.Run(ReceiveLoop);
     }
 
-    private async Task ConnectAsClientAsync(string ip)
+    private async Task ConnectAsClientAsync(string ip, int port)
     {
         _client = new TcpClient();
-        await _client.ConnectAsync(ip, Port);
+        await _client.ConnectAsync(ip, port);
         _stream = _client.GetStream();
         SetState(ConnectionStateEnum.Connected);
         _ = Task.Run(ReceiveLoop);

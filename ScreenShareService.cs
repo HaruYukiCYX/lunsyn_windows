@@ -30,12 +30,21 @@ public class ScreenShareService : IDisposable
 
         if (host != null)
         {
-            await ConnectAsClientAsync(host.IPAddress);
+            await ConnectAsync(host.IPAddress, Port);
         }
         else
         {
             await StartServerAsync();
         }
+    }
+
+    /// 手动连接指定 IP
+    public async Task ConnectAsync(string host, int port = Port)
+    {
+        if (ConnectionState != ConnectionStateEnum.Disconnected) return;
+        SetState(ConnectionStateEnum.Connecting);
+        _running = true;
+        await ConnectAsClientAsync(host, port);
     }
 
     private async Task StartServerAsync()
@@ -50,10 +59,10 @@ public class ScreenShareService : IDisposable
         _ = Task.Run(ReceiveLoop);
     }
 
-    private async Task ConnectAsClientAsync(string ip)
+    private async Task ConnectAsClientAsync(string ip, int port)
     {
         _client = new TcpClient();
-        await _client.ConnectAsync(ip, Port);
+        await _client.ConnectAsync(ip, port);
         _stream = _client.GetStream();
         SetState(ConnectionStateEnum.Connected);
         _ = Task.Run(ReceiveLoop);

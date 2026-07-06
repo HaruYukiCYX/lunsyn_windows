@@ -55,8 +55,8 @@ public partial class MainWindow : Window
         var accent = new AccentPolicy
         {
             AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
-            AccentFlags = 2, // 从标题栏取色
-            GradientColor = 0x00FFFFFF // 透明
+            AccentFlags = 2,
+            GradientColor = 0x00FFFFFF
         };
         var accentPtr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
         Marshal.StructureToPtr(accent, accentPtr, false);
@@ -75,10 +75,10 @@ public partial class MainWindow : Window
     private void Window_SourceInitialized(object sender, EventArgs e)
     {
         try { EnableAcrylic(); }
-        catch { /* 非 Win10+ 则回退到普通背景 */ }
+        catch { /* 非 Win10+ 回退 */ }
     }
 
-    // ========== 边缘吸附（手动拖拽） ==========
+    // ========== 边缘吸附 ==========
 
     private bool _isDragging;
     private Point _dragOffset;
@@ -114,17 +114,13 @@ public partial class MainWindow : Window
         var working = screen.WorkingArea;
         double targetX = Left, targetY = Top;
 
-        // 左边缘
         if (Math.Abs(Left - working.Left) < SnapThreshold)
             targetX = working.Left;
-        // 右边缘
         else if (Math.Abs(Left + Width - working.Right) < SnapThreshold)
             targetX = working.Right - Width;
 
-        // 顶部
         if (Math.Abs(Top - working.Top) < SnapThreshold)
             targetY = working.Top;
-        // 底部
         else if (Math.Abs(Top + Height - working.Bottom) < SnapThreshold)
             targetY = working.Bottom - Height;
 
@@ -140,15 +136,9 @@ public partial class MainWindow : Window
         var duration = new Duration(TimeSpan.FromMilliseconds(180));
 
         if (Math.Abs(toX - Left) > 1)
-        {
-            var animX = new DoubleAnimation(toX, duration) { EasingFunction = ease };
-            BeginAnimation(Window.LeftProperty, animX);
-        }
+            BeginAnimation(LeftProperty, new DoubleAnimation(toX, duration) { EasingFunction = ease });
         if (Math.Abs(toY - Top) > 1)
-        {
-            var animY = new DoubleAnimation(toY, duration) { EasingFunction = ease };
-            BeginAnimation(Window.TopProperty, animY);
-        }
+            BeginAnimation(TopProperty, new DoubleAnimation(toY, duration) { EasingFunction = ease });
     }
 
     // ========== 核心功能 ==========
@@ -194,11 +184,7 @@ public partial class MainWindow : Window
             Top = (working.Height - Height) / 2 + working.Top;
         };
 
-        Deactivated += (_, _) =>
-        {
-            if (!_isPinned)
-                Hide();
-        };
+        Deactivated += (_, _) => { if (!_isPinned) Hide(); };
     }
 
     private void PinBtn_Click(object sender, RoutedEventArgs e)
@@ -211,6 +197,35 @@ public partial class MainWindow : Window
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Hide();
+
+    // ========== 手动 IP ==========
+
+    private void ManualIPBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ManualIPPanel.Visibility = Visibility.Visible;
+    }
+
+    private void IPCancenBtn_Click(object sender, RoutedEventArgs e)
+    {
+        ManualIPPanel.Visibility = Visibility.Collapsed;
+        IPTextBox.Clear();
+    }
+
+    private async void IPConnectBtn_Click(object sender, RoutedEventArgs e)
+    {
+        var ip = IPTextBox.Text?.Trim();
+        if (string.IsNullOrEmpty(ip)) return;
+
+        _syncService.Stop();
+        _syncTimer.Stop();
+        SyncBtn.IsEnabled = false;
+        SyncStatusLabel.Text = "连接中...";
+        SyncDot.Fill = new SolidColorBrush(Colors.Gold);
+        await _syncService.ConnectAsync(ip);
+        SyncBtn.IsEnabled = true;
+        ManualIPPanel.Visibility = Visibility.Collapsed;
+        IPTextBox.Clear();
+    }
 
     // ========== 活动监控 ==========
 
@@ -350,7 +365,7 @@ public partial class MainWindow : Window
             return;
         }
         SyncBtn.IsEnabled = false;
-        SyncStatusLabel.Text = "连接中...";
+        SyncStatusLabel.Text = "自动连接中...";
         SyncDot.Fill = new SolidColorBrush(Colors.Gold);
         await _syncService.StartAsync();
         SyncBtn.IsEnabled = true;
@@ -381,7 +396,7 @@ public partial class MainWindow : Window
                     _syncTimer.Stop();
                     SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
                     SyncStatusLabel.Text = "未连接";
-                    SyncBtn.Content = "连接好友";
+                    SyncBtn.Content = "自动连接";
                     SyncBtn.Style = (Style)FindResource("PrimaryBtn");
                     FriendEmptyText.Text = "好友暂未连接";
                     FriendEmptyText.Visibility = Visibility.Visible;
