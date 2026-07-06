@@ -5,6 +5,9 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Orientation = System.Windows.Controls.Orientation;
+using Color = System.Windows.Media.Color;
+using Colors = System.Windows.Media.Colors;
 
 namespace lunsyn;
 
@@ -98,13 +101,13 @@ public partial class MainWindow : Window
         MyActivityEmpty.Visibility = Visibility.Collapsed;
 
         if (!string.IsNullOrEmpty(state.ForegroundApp))
-            MyActivityPanel.Children.Add(CreateRow("📱", "应用", state.ForegroundApp));
+            MyActivityPanel.Children.Add(CreateRow("\U0001f4f1", "应用", state.ForegroundApp));
         if (!string.IsNullOrEmpty(state.BrowserTitle))
-            MyActivityPanel.Children.Add(CreateRow("🌐", "网页", state.BrowserTitle));
+            MyActivityPanel.Children.Add(CreateRow("\U0001f310", "网页", state.BrowserTitle));
         if (state.IsPlaying)
         {
-            MyActivityPanel.Children.Add(CreateRow("🎵", "音乐", $"{state.MusicArtist} — {state.MusicTitle}"));
-            MyActivityPanel.Children.Add(CreateRow("📻", "播放器", state.MusicApp));
+            MyActivityPanel.Children.Add(CreateRow("\U0001f3b5", "音乐", $"{state.MusicArtist} — {state.MusicTitle}"));
+            MyActivityPanel.Children.Add(CreateRow("\U0001f4fb", "播放器", state.MusicApp));
         }
 
         if (MyActivityPanel.Children.Count == 0)
@@ -113,7 +116,11 @@ public partial class MainWindow : Window
 
     private static StackPanel CreateRow(string icon, string label, string detail)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 2, 0, 2)
+        };
         panel.Children.Add(new TextBlock { Text = icon, FontSize = 11, Width = 18, TextAlignment = TextAlignment.Center });
         panel.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), Margin = new Thickness(6, 0, 6, 0) });
         panel.Children.Add(new TextBlock { Text = detail, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)), TextTrimming = TextTrimming.CharacterEllipsis });
@@ -136,9 +143,9 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrEmpty(payload.ForegroundApp))
         {
-            FriendActivityPanel.Children.Add(CreateRow("📱", "应用", payload.ForegroundApp));
+            FriendActivityPanel.Children.Add(CreateRow("\U0001f4f1", "应用", payload.ForegroundApp));
             if (payload.IsPlaying)
-                FriendActivityPanel.Children.Add(CreateRow("🎵", "音乐", $"{payload.MusicArtist} — {payload.MusicTitle}"));
+                FriendActivityPanel.Children.Add(CreateRow("\U0001f3b5", "音乐", $"{payload.MusicArtist} — {payload.MusicTitle}"));
         }
         else
         {
@@ -152,8 +159,6 @@ public partial class MainWindow : Window
         if (_isConnected)
             await _syncService.SendPayloadAsync(_monitor.ToPayload());
     }
-
-    // ========== 活动同步连接 ==========
 
     private async void SyncBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -204,8 +209,6 @@ public partial class MainWindow : Window
         });
     }
 
-    // ========== 屏幕共享 ==========
-
     private async void ScreenStartBtn_Click(object sender, RoutedEventArgs e)
     {
         ScreenStartBtn.IsEnabled = false;
@@ -247,7 +250,6 @@ public partial class MainWindow : Window
                     ScreenStartBtn.Visibility = Visibility.Collapsed;
                     ScreenJoinBtn.Visibility = Visibility.Collapsed;
                     ScreenStopBtn.Visibility = Visibility.Visible;
-                    // 开始捕获并发送
                     _isSharing = true;
                     await _captureManager.StartCaptureAsync();
                     break;
@@ -293,8 +295,6 @@ public partial class MainWindow : Window
             catch { }
         });
     }
-
-    // ========== 分享 ==========
 
     private void ShareBtn_Click(object sender, RoutedEventArgs e)
     {

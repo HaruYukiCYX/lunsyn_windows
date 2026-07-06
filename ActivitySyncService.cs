@@ -37,23 +37,20 @@ public class ActivitySyncService : IDisposable
     {
         if (ConnectionState != ConnectionStateEnum.Disconnected) return;
         SetState(ConnectionStateEnum.Connecting);
-
         _running = true;
 
-        // 先尝试作为客户端搜索 Bonjour
+        // 先尝试搜索已有服务端
         var results = await ZeroconfResolver.ResolveAsync("_lunsynchat._tcp", TimeSpan.FromSeconds(3));
         var host = results.FirstOrDefault();
-        
+
         if (host != null)
         {
-            // 找到服务端，作为客户端连接
             System.Console.WriteLine($"[望月] 找到服务端: {host.IPAddress}");
             await ConnectAsClientAsync(host.IPAddress);
         }
         else
         {
-            // 没找到，自己作为服务端
-            System.Console.WriteLine("[望月] 启动活动同步服务端...");
+            System.Console.WriteLine("[望月] 启动活动同步服务端 (TCP)...");
             await StartServerAsync();
         }
     }
@@ -63,10 +60,6 @@ public class ActivitySyncService : IDisposable
         _listener = new TcpListener(IPAddress.Any, Port);
         _listener.Start();
         System.Console.WriteLine($"[望月] 活动同步服务端已启动 (端口 {Port})");
-
-        // 注册 Bonjour
-        _ = Task.Run(() => RegisterBonjourAsync());
-
         var client = await _listener.AcceptTcpClientAsync();
         _client = client;
         _stream = client.GetStream();
@@ -81,24 +74,6 @@ public class ActivitySyncService : IDisposable
         _stream = _client.GetStream();
         SetState(ConnectionStateEnum.Connected);
         _ = Task.Run(ReceiveLoop);
-    }
-
-    private async Task RegisterBonjourAsync()
-    {
-        try
-        {
-            var service = new ZeroconfService
-            {
-                Name = "LunsynActivitySync",
-                Type = "_lunsynchat._tcp",
-                Port = (ushort)Port
-            };
-            await service.PublishAsync();
-        }
-        catch (Exception ex)
-        {
-            System.Console.WriteLine($"[望月] Bonjour 注册失败: {ex.Message}");
-        }
     }
 
     public async Task SendPayloadAsync(ActivityPayload payload)

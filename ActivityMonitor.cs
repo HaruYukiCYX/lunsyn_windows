@@ -26,9 +26,7 @@ public class ActivityMonitor : IDisposable
     public ActivityState FriendActivity { get; private set; } = new();
 
     private readonly Timer _timer;
-    private string _lastForegroundApp = "";
 
-    // Win32 API
     [DllImport("user32.dll")]
     private static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")]
@@ -55,7 +53,6 @@ public class ActivityMonitor : IDisposable
             var proc = Process.GetProcessById((int)pid);
             state.ForegroundApp = proc.ProcessName;
 
-            // 浏览器检测
             if (IsBrowser(proc.ProcessName))
             {
                 var title = new StringBuilder(256);
@@ -63,7 +60,6 @@ public class ActivityMonitor : IDisposable
                 state.BrowserTitle = title.ToString();
             }
 
-            // 音乐检测
             DetectMusic(state);
         }
         catch { }

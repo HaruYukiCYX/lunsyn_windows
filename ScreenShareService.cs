@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
@@ -43,7 +42,7 @@ public class ScreenShareService : IDisposable
     {
         _listener = new TcpListener(IPAddress.Any, Port);
         _listener.Start();
-        _ = Task.Run(() => RegisterBonjourAsync());
+        System.Console.WriteLine($"[望月] 屏幕共享服务端已启动 (端口 {Port})");
         var client = await _listener.AcceptTcpClientAsync();
         _client = client;
         _stream = client.GetStream();
@@ -58,21 +57,6 @@ public class ScreenShareService : IDisposable
         _stream = _client.GetStream();
         SetState(ConnectionStateEnum.Connected);
         _ = Task.Run(ReceiveLoop);
-    }
-
-    private async Task RegisterBonjourAsync()
-    {
-        try
-        {
-            var service = new ZeroconfService
-            {
-                Name = "LunsynScreenShare",
-                Type = "_lunsyn._tcp",
-                Port = (ushort)Port
-            };
-            await service.PublishAsync();
-        }
-        catch { }
     }
 
     public async Task SendFrameAsync(byte[] data)
