@@ -1,12 +1,136 @@
-﻿<Window x:Class="lunsyn.MainWindow"
+<Window x:Class="lunsyn.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:lunsyn"
-        mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Width="340" Height="600"
+        WindowStyle="None" AllowsTransparency="True"
+        ResizeMode="NoResize" ShowInTaskbar="False"
+        Topmost="True" Background="Transparent">
 
-    </Grid>
+    <Window.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="#E0E0E0"/>
+        </Style>
+        <Style x:Key="SubText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Foreground" Value="#888"/>
+        </Style>
+        <Style x:Key="ActionBtn" TargetType="Button">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="Medium"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="5"
+                                Padding="10,4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="#E61A1A2E" CornerRadius="16" BorderBrush="#3A3A5E" BorderThickness="1">
+        <ScrollViewer VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <!-- Emoji 区域 -->
+                <StackPanel Margin="0,20,0,8">
+                    <TextBlock x:Name="EmojiText" Text="🌙" FontSize="72"
+                               HorizontalAlignment="Center" TextAlignment="Center"/>
+                    <TextBlock x:Name="StatusText" Text="灵魂暂时离线... 勿扰 😴"
+                               FontSize="12" Foreground="#999"
+                               HorizontalAlignment="Center" TextAlignment="Center"
+                               Margin="16,8,16,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock Text="望月 · Lunsyn" FontSize="11" Foreground="#666"
+                               HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Separator Margin="16,8" Background="#2A2A4E"/>
+
+                <!-- 我的活动 -->
+                <StackPanel Margin="16,4">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="😶" FontSize="14" Width="18" TextAlignment="Center"/>
+                        <TextBlock Text="我的活动" Style="{StaticResource SectionHeader}" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="MyActivityPanel" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="MyActivityEmpty" Text="等待检测..."
+                               Style="{StaticResource SubText}" HorizontalAlignment="Center"/>
+                </StackPanel>
+
+                <Separator Margin="16,4" Background="#2A2A4E"/>
+
+                <!-- TA 的活动 -->
+                <StackPanel Margin="16,4">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="❤️" FontSize="14" Width="18" TextAlignment="Center"/>
+                        <TextBlock Text="TA 的活动" Style="{StaticResource SectionHeader}" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <StackPanel x:Name="FriendActivityPanel" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="FriendEmptyText" Text="好友暂未连接"
+                               Style="{StaticResource SubText}" HorizontalAlignment="Center"/>
+                    <TextBlock x:Name="FriendSubText" Text=""
+                               FontSize="10" Foreground="#555" HorizontalAlignment="Center"
+                               Margin="0,2,0,0"/>
+
+                    <!-- 连接按钮 -->
+                    <StackPanel Orientation="Horizontal" Margin="0,6,0,0">
+                        <Ellipse x:Name="SyncDot" Width="6" Height="6" Fill="Gray" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="SyncStatusLabel" Text="未连接"
+                                   Style="{StaticResource SubText}" VerticalAlignment="Center"/>
+                        <Button x:Name="SyncBtn" Content="连接好友"
+                                Style="{StaticResource ActionBtn}"
+                                Background="#33E91E8C" Margin="10,0,0,0"
+                                Click="SyncBtn_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Separator Margin="16,4" Background="#2A2A4E"/>
+
+                <!-- 屏幕共享 -->
+                <StackPanel Margin="16,4">
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                        <TextBlock Text="🖥️" FontSize="14" Width="18" TextAlignment="Center"/>
+                        <TextBlock Text="屏幕共享" Style="{StaticResource SectionHeader}" Margin="6,0,0,0"/>
+                    </StackPanel>
+                    <Image x:Name="RemoteFrameImage" MaxHeight="150"
+                           Stretch="Uniform" Visibility="Collapsed"
+                           Margin="0,0,0,6"/>
+                    <StackPanel Orientation="Horizontal">
+                        <Ellipse x:Name="ScreenDot" Width="6" Height="6" Fill="Gray" Margin="0,0,6,0"/>
+                        <TextBlock x:Name="ScreenStatusLabel" Text="未连接"
+                                   Style="{StaticResource SubText}" VerticalAlignment="Center"/>
+                        <Button x:Name="ScreenStartBtn" Content="开始共享"
+                                Style="{StaticResource ActionBtn}"
+                                Background="#337B2FBE" Margin="10,0,0,0"
+                                Click="ScreenStartBtn_Click"/>
+                        <Button x:Name="ScreenJoinBtn" Content="加入共享"
+                                Style="{StaticResource ActionBtn}"
+                                Background="#333B82F6" Margin="4,0,0,0"
+                                Click="ScreenJoinBtn_Click"/>
+                        <Button x:Name="ScreenStopBtn" Content="停止"
+                                Style="{StaticResource ActionBtn}"
+                                Background="#33EF4444" Margin="10,0,0,0"
+                                Visibility="Collapsed"
+                                Click="ScreenStopBtn_Click"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <Separator Margin="16,4" Background="#2A2A4E"/>
+
+                <!-- 分享 -->
+                <StackPanel Margin="16,4,16,12">
+                    <Button x:Name="ShareBtn" Content="💬 复制状态到剪贴板"
+                            Style="{StaticResource ActionBtn}"
+                            Background="#3322C55E" HorizontalAlignment="Center"
+                            Click="ShareBtn_Click"/>
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Border>
 </Window>
