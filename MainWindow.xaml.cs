@@ -1,30 +1,166 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
+using System.Windows.Interop;
 using Orientation = System.Windows.Controls.Orientation;
 using Color = System.Windows.Media.Color;
 using Colors = System.Windows.Media.Colors;
+using Point = System.Windows.Point;
 
 namespace lunsyn;
 
 public partial class MainWindow : Window
 {
+    // ========== 亚克力毛玻璃效果 ==========
+
+    [DllImport("user32.dll")]
+    private static extern int SetWindowCompositionAttribute(IntPtr hwnd, ref WindowCompositionAttributeData data);
+
+    private struct WindowCompositionAttributeData
+    {
+        public WindowCompositionAttribute Attribute;
+        public IntPtr Data;
+        public int SizeOfData;
+    }
+
+    private enum WindowCompositionAttribute { WCA_ACCENT_POLICY = 19 }
+    private enum AccentState
+    {
+        ACCENT_DISABLED = 0,
+        ACCENT_ENABLE_GRADIENT = 1,
+        ACCENT_ENABLE_TRANSPARENTGRADIENT = 2,
+        ACCENT_ENABLE_BLURBEHIND = 3,
+        ACCENT_ENABLE_ACRYLICBLURBEHIND = 4
+    }
+
+    private struct AccentPolicy
+    {
+        public AccentState AccentState;
+        public int AccentFlags;
+        public int GradientColor;
+        public int AnimationId;
+    }
+
+    private void EnableAcrylic()
+    {
+        var windowHelper = new WindowInteropHelper(this);
+        var accent = new AccentPolicy
+        {
+            AccentState = AccentState.ACCENT_ENABLE_ACRYLICBLURBEHIND,
+            AccentFlags = 2, // 从标题栏取色
+            GradientColor = 0x00FFFFFF // 透明
+        };
+        var accentPtr = Marshal.AllocHGlobal(Marshal.SizeOf(accent));
+        Marshal.StructureToPtr(accent, accentPtr, false);
+
+        var data = new WindowCompositionAttributeData
+        {
+            Attribute = WindowCompositionAttribute.WCA_ACCENT_POLICY,
+            SizeOfData = Marshal.SizeOf(accent),
+            Data = accentPtr
+        };
+
+        SetWindowCompositionAttribute(windowHelper.Handle, ref data);
+        Marshal.FreeHGlobal(accentPtr);
+    }
+
+    private void Window_SourceInitialized(object sender, EventArgs e)
+    {
+        try { EnableAcrylic(); }
+        catch { /* 非 Win10+ 则回退到普通背景 */ }
+    }
+
+    // ========== 边缘吸附（手动拖拽） ==========
+
+    private bool _isDragging;
+    private Point _dragOffset;
+    private const int SnapThreshold = 25;
+
+    private void Header_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2) return;
+        _isDragging = true;
+        _dragOffset = e.GetPosition(this);
+        ((Border)sender).CaptureMouse();
+    }
+
+    private void Header_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (!_isDragging || e.LeftButton != MouseButtonState.Pressed) return;
+
+        var screenPos = PointToScreen(e.GetPosition(this));
+        Left = screenPos.X - _dragOffset.X;
+        Top = screenPos.Y - _dragOffset.Y;
+    }
+
+    private void Header_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+    {
+        _isDragging = false;
+        ((Border)sender).ReleaseMouseCapture();
+        SnapToEdge();
+    }
+
+    private void SnapToEdge()
+    {
+        var screen = Screen.FromHandle(new WindowInteropHelper(this).Handle);
+        var working = screen.WorkingArea;
+        double targetX = Left, targetY = Top;
+
+        // 左边缘
+        if (Math.Abs(Left - working.Left) < SnapThreshold)
+            targetX = working.Left;
+        // 右边缘
+        else if (Math.Abs(Left + Width - working.Right) < SnapThreshold)
+            targetX = working.Right - Width;
+
+        // 顶部
+        if (Math.Abs(Top - working.Top) < SnapThreshold)
+            targetY = working.Top;
+        // 底部
+        else if (Math.Abs(Top + Height - working.Bottom) < SnapThreshold)
+            targetY = working.Bottom - Height;
+
+        if (Math.Abs(targetX - Left) > 1 || Math.Abs(targetY - Top) > 1)
+        {
+            AnimateWindow(targetX, targetY);
+        }
+    }
+
+    private void AnimateWindow(double toX, double toY)
+    {
+        var ease = new QuadraticEase { EasingMode = EasingMode.EaseOut };
+        var duration = new Duration(TimeSpan.FromMilliseconds(180));
+
+        if (Math.Abs(toX - Left) > 1)
+        {
+            var animX = new DoubleAnimation(toX, duration) { EasingFunction = ease };
+            BeginAnimation(Window.LeftProperty, animX);
+        }
+        if (Math.Abs(toY - Top) > 1)
+        {
+            var animY = new DoubleAnimation(toY, duration) { EasingFunction = ease };
+            BeginAnimation(Window.TopProperty, animY);
+        }
+    }
+
+    // ========== 核心功能 ==========
+
     private readonly ActivityMonitor _monitor = new();
     private readonly ActivitySyncService _syncService = new();
     private readonly ScreenShareService _shareService = new();
     private readonly ScreenCaptureManager _captureManager = new();
     private readonly System.Timers.Timer _syncTimer = new(2000);
-    private bool _isConnected = false;
-    private bool _isSharing = false;
-    private bool _isPinned = false;
-    private const int EdgeSnapThreshold = 20;
+    private bool _isConnected;
+    private bool _isSharing;
+    private bool _isPinned;
 
     private static readonly Dictionary<string, string> StatusMap = new()
     {
@@ -50,16 +186,14 @@ public partial class MainWindow : Window
         _syncTimer.Elapsed += (_, _) => _ = SendActivityAsync();
         _syncTimer.AutoReset = true;
 
-        // 默认位置：屏幕右侧
         Loaded += (_, _) =>
         {
-            var screen = Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            var screen = Screen.FromHandle(new WindowInteropHelper(this).Handle);
             var working = screen.WorkingArea;
-            Left = working.Right - Width - 10;
-            Top = (working.Height - Height) / 2;
+            Left = working.Right - Width - 12;
+            Top = (working.Height - Height) / 2 + working.Top;
         };
 
-        // 失焦时如果不是置顶状态则隐藏
         Deactivated += (_, _) =>
         {
             if (!_isPinned)
@@ -67,92 +201,16 @@ public partial class MainWindow : Window
         };
     }
 
-    // ========== 边缘吸附 ==========
-
-    private void Window_LocationChanged(object sender, EventArgs e)
-    {
-        if (_isPinned) return;
-
-        var screen = Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
-        var working = screen.WorkingArea;
-
-        // 转换为屏幕坐标
-        var left = Left;
-        var top = Top;
-        var right = left + Width;
-        var bottom = top + Height;
-
-        bool snapped = false;
-
-        // 左边缘
-        if (Math.Abs(left - working.Left) < EdgeSnapThreshold)
-        {
-            AnimateTo(left, working.Left, top, null);
-            snapped = true;
-        }
-        // 右边缘
-        else if (Math.Abs(right - working.Right) < EdgeSnapThreshold)
-        {
-            AnimateTo(left, working.Right - Width, top, null);
-            snapped = true;
-        }
-
-        // 顶部
-        if (Math.Abs(top - working.Top) < EdgeSnapThreshold)
-        {
-            AnimateTo(left, null, top, working.Top);
-            snapped = true;
-        }
-        // 底部
-        else if (Math.Abs(bottom - working.Bottom) < EdgeSnapThreshold)
-        {
-            AnimateTo(left, null, top, working.Bottom - Height);
-            snapped = true;
-        }
-    }
-
-    private void AnimateTo(double? fromLeft, double? toLeft, double? fromTop, double? toTop)
-    {
-        var duration = new Duration(TimeSpan.FromMilliseconds(150));
-
-        if (toLeft.HasValue)
-        {
-            var anim = new DoubleAnimation(toLeft.Value, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            BeginAnimation(Window.LeftProperty, anim);
-        }
-
-        if (toTop.HasValue)
-        {
-            var anim = new DoubleAnimation(toTop.Value, duration)
-            {
-                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
-            };
-            BeginAnimation(Window.TopProperty, anim);
-        }
-    }
-
-    private void Header_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (e.ClickCount == 2) return;
-        DragMove();
-    }
-
     private void PinBtn_Click(object sender, RoutedEventArgs e)
     {
         _isPinned = !_isPinned;
         PinBtn.Content = _isPinned ? "📍" : "📌";
         PinBtn.Foreground = _isPinned
-            ? new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6))
-            : new SolidColorBrush(Color.FromRgb(0xA5, 0xB4, 0xFC));
+            ? new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6))
+            : new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
     }
 
-    private void CloseBtn_Click(object sender, RoutedEventArgs e)
-    {
-        Hide();
-    }
+    private void CloseBtn_Click(object sender, RoutedEventArgs e) => Hide();
 
     // ========== 活动监控 ==========
 
@@ -192,9 +250,9 @@ public partial class MainWindow : Window
             StatusText.Text = "在互联网的海洋里漂着～ 🌊";
             return;
         }
-        if (StatusMap.TryGetValue(app, out var status))
+        if (StatusMap.TryGetValue(app, out var s))
         {
-            StatusText.Text = status;
+            StatusText.Text = s;
             return;
         }
         if (!string.IsNullOrEmpty(app))
@@ -226,13 +284,21 @@ public partial class MainWindow : Window
 
     private static StackPanel CreateRow(string icon, string detail)
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
-        panel.Children.Add(new TextBlock { Text = icon, FontSize = 12, Width = 22, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        var panel = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 3, 0, 3)
+        };
         panel.Children.Add(new TextBlock
         {
-            Text = detail,
-            FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+            Text = icon, FontSize = 12, Width = 22,
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center
+        });
+        panel.Children.Add(new TextBlock
+        {
+            Text = detail, FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0x33, 0x41, 0x55)),
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             Margin = new Thickness(4, 0, 0, 0)
@@ -285,7 +351,7 @@ public partial class MainWindow : Window
         }
         SyncBtn.IsEnabled = false;
         SyncStatusLabel.Text = "连接中...";
-        SyncDot.Fill = new SolidColorBrush(Colors.Yellow);
+        SyncDot.Fill = new SolidColorBrush(Colors.Gold);
         await _syncService.StartAsync();
         SyncBtn.IsEnabled = true;
     }
@@ -307,15 +373,15 @@ public partial class MainWindow : Window
                     FriendEmptyText.Visibility = Visibility.Visible;
                     break;
                 case ActivitySyncService.ConnectionStateEnum.Connecting:
-                    SyncDot.Fill = new SolidColorBrush(Colors.Yellow);
+                    SyncDot.Fill = new SolidColorBrush(Colors.Gold);
                     SyncStatusLabel.Text = "连接中...";
                     break;
                 default:
                     _isConnected = false;
                     _syncTimer.Stop();
-                    SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80));
+                    SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
                     SyncStatusLabel.Text = "未连接";
-                    SyncBtn.Content = "连接";
+                    SyncBtn.Content = "连接好友";
                     SyncBtn.Style = (Style)FindResource("PrimaryBtn");
                     FriendEmptyText.Text = "好友暂未连接";
                     FriendEmptyText.Visibility = Visibility.Visible;
@@ -331,7 +397,7 @@ public partial class MainWindow : Window
         ScreenStartBtn.IsEnabled = false;
         ScreenJoinBtn.IsEnabled = false;
         ScreenStatusLabel.Text = "等待连接...";
-        ScreenDot.Fill = new SolidColorBrush(Colors.Yellow);
+        ScreenDot.Fill = new SolidColorBrush(Colors.Gold);
         await _shareService.StartAsync();
         ScreenStartBtn.IsEnabled = true;
         ScreenJoinBtn.IsEnabled = true;
@@ -342,7 +408,7 @@ public partial class MainWindow : Window
         ScreenStartBtn.IsEnabled = false;
         ScreenJoinBtn.IsEnabled = false;
         ScreenStatusLabel.Text = "连接中...";
-        ScreenDot.Fill = new SolidColorBrush(Colors.Yellow);
+        ScreenDot.Fill = new SolidColorBrush(Colors.Gold);
         await _shareService.StartAsync();
         ScreenStartBtn.IsEnabled = true;
         ScreenJoinBtn.IsEnabled = true;
@@ -371,11 +437,11 @@ public partial class MainWindow : Window
                     await _captureManager.StartCaptureAsync();
                     break;
                 case ScreenShareService.ConnectionStateEnum.Connecting:
-                    ScreenDot.Fill = new SolidColorBrush(Colors.Yellow);
+                    ScreenDot.Fill = new SolidColorBrush(Colors.Gold);
                     ScreenStatusLabel.Text = "连接中...";
                     break;
                 default:
-                    ScreenDot.Fill = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80));
+                    ScreenDot.Fill = new SolidColorBrush(Color.FromRgb(0x94, 0xA3, 0xB8));
                     ScreenStatusLabel.Text = "未连接";
                     ScreenStartBtn.Visibility = Visibility.Visible;
                     ScreenJoinBtn.Visibility = Visibility.Visible;
@@ -390,8 +456,7 @@ public partial class MainWindow : Window
 
     private void OnFrameCaptured(byte[] data)
     {
-        if (_isSharing)
-            _ = _shareService.SendFrameAsync(data);
+        if (_isSharing) _ = _shareService.SendFrameAsync(data);
     }
 
     private void OnFrameReceived(byte[] data)
@@ -401,12 +466,12 @@ public partial class MainWindow : Window
             try
             {
                 using var ms = new System.IO.MemoryStream(data);
-                var bitmap = new BitmapImage();
-                bitmap.BeginInit();
-                bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.StreamSource = ms;
-                bitmap.EndInit();
-                RemoteFrameImage.Source = bitmap;
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
+                bmp.StreamSource = ms;
+                bmp.EndInit();
+                RemoteFrameImage.Source = bmp;
                 RemoteFrameImage.Visibility = Visibility.Visible;
             }
             catch { }
@@ -421,11 +486,9 @@ public partial class MainWindow : Window
         {
             System.Windows.Clipboard.SetText(StatusText.Text);
             var orig = ShareBtn.Content;
-            ShareBtn.Content = "✅ 已复制";
+            ShareBtn.Content = "✅ 已复制到剪贴板";
             _ = Task.Delay(2000).ContinueWith(_ =>
-            {
-                Dispatcher.Invoke(() => ShareBtn.Content = orig);
-            });
+                Dispatcher.Invoke(() => ShareBtn.Content = orig));
         }
         catch { }
     }

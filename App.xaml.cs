@@ -26,14 +26,19 @@ public partial class App : Application
 
         _notifyIcon.Click += (_, args) =>
         {
-            if (args is MouseEventArgs mouseArgs && mouseArgs.Button == MouseButtons.Left)
+            if (args is MouseEventArgs m && m.Button == MouseButtons.Left)
                 TogglePopup();
         };
 
         _notifyIcon.ContextMenuStrip = new ContextMenuStrip();
         _notifyIcon.ContextMenuStrip.Items.Add("关于望月", null, (_, _) =>
         {
-            MessageBox.Show("望月 · Lunsyn\n异地情侣/朋友的桌面伴侣\n\nmacOS 版已上线，Windows 版开发中", "关于望月");
+            MessageBox.Show(
+                "望月 · Lunsyn\n\n" +
+                "专为异地情侣/朋友设计的桌面伴侣\n" +
+                "实时活动同步 · 屏幕共享\n\n" +
+                "macOS / Windows 跨平台互通",
+                "关于望月");
         });
         _notifyIcon.ContextMenuStrip.Items.Add(new ToolStripSeparator());
         _notifyIcon.ContextMenuStrip.Items.Add("退出望月", null, (_, _) =>
@@ -56,7 +61,7 @@ public partial class App : Application
         {
             var screen = Screen.FromPoint(Control.MousePosition);
             var working = screen.WorkingArea;
-            _popup.Left = Math.Max(working.Left, Math.Min(working.Right - _popup.Width - 10, working.Right - _popup.Width - 10));
+            _popup.Left = working.Right - _popup.Width - 12;
             _popup.Top = Math.Max(working.Top, (working.Height - _popup.Height) / 2 + working.Top);
             _popup.Show();
             _popup.Activate();
