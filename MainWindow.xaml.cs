@@ -17,6 +17,15 @@ namespace lunsyn;
 
 public partial class MainWindow : Window
 {
+    // ========== Win32 窗口置顶 ==========
+
+    [DllImport("user32.dll")]
+    private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    private static readonly IntPtr HWND_TOPMOST = new(-1);
+    private static readonly IntPtr HWND_NOTOPMOST = new(-2);
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOSIZE = 0x0001;
+
     // ========== 亚克力毛玻璃效果 ==========
 
     [DllImport("user32.dll")]
@@ -173,7 +182,18 @@ public partial class MainWindow : Window
             Top = (working.Height - Height) / 2 + working.Top;
         };
 
-        Deactivated += (_, _) => { if (!_isPinned) Hide(); };
+        // 不再自动隐藏：窗口始终可见，点击叉才隐藏，方便放副屏实时看状态
+        _isPinned = false;
+        UpdateTopmost();
+    }
+
+    private void UpdateTopmost()
+    {
+        var handle = new WindowInteropHelper(this).Handle;
+        if (_isPinned)
+            SetWindowPos(handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+        else
+            SetWindowPos(handle, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
     }
 
     private void PinBtn_Click(object sender, RoutedEventArgs e)
@@ -183,6 +203,7 @@ public partial class MainWindow : Window
         PinBtn.Foreground = _isPinned
             ? new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6))
             : new SolidColorBrush(Color.FromRgb(0x64, 0x74, 0x8B));
+        UpdateTopmost();
     }
 
     private void CloseBtn_Click(object sender, RoutedEventArgs e) => Hide();
@@ -218,10 +239,23 @@ public partial class MainWindow : Window
 
     // ========== 活动监控 ==========
 
+    private ActivityState _lastActivity = new(); // 缓存上一个活动，避免望月自身被检测为前台
+
     private void OnMyActivityChanged(ActivityState state)
     {
         Dispatcher.Invoke(() =>
         {
+            // 过滤望月自身：检测到自己是前台时，保持上一个活动状态
+            var app = state.ForegroundApp.ToLower();
+            if (app == "lunsyn" || app.Contains("望月"))
+            {
+                state = _lastActivity;
+            }
+            else
+            {
+                _lastActivity = state;
+            }
+
             UpdateEmoji(state);
             UpdateStatusText(state);
             UpdateMyActivityPanel(state);
