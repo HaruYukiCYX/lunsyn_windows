@@ -3,8 +3,11 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Forms;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Orientation = System.Windows.Controls.Orientation;
 using Color = System.Windows.Media.Color;
 using Colors = System.Windows.Media.Colors;
@@ -20,6 +23,8 @@ public partial class MainWindow : Window
     private readonly System.Timers.Timer _syncTimer = new(2000);
     private bool _isConnected = false;
     private bool _isSharing = false;
+    private bool _isPinned = false;
+    private const int EdgeSnapThreshold = 20;
 
     private static readonly Dictionary<string, string> StatusMap = new()
     {
@@ -44,7 +49,112 @@ public partial class MainWindow : Window
         _captureManager.FrameCaptured += OnFrameCaptured;
         _syncTimer.Elapsed += (_, _) => _ = SendActivityAsync();
         _syncTimer.AutoReset = true;
+
+        // 默认位置：屏幕右侧
+        Loaded += (_, _) =>
+        {
+            var screen = Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+            var working = screen.WorkingArea;
+            Left = working.Right - Width - 10;
+            Top = (working.Height - Height) / 2;
+        };
+
+        // 失焦时如果不是置顶状态则隐藏
+        Deactivated += (_, _) =>
+        {
+            if (!_isPinned)
+                Hide();
+        };
     }
+
+    // ========== 边缘吸附 ==========
+
+    private void Window_LocationChanged(object sender, EventArgs e)
+    {
+        if (_isPinned) return;
+
+        var screen = Screen.FromHandle(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+        var working = screen.WorkingArea;
+
+        // 转换为屏幕坐标
+        var left = Left;
+        var top = Top;
+        var right = left + Width;
+        var bottom = top + Height;
+
+        bool snapped = false;
+
+        // 左边缘
+        if (Math.Abs(left - working.Left) < EdgeSnapThreshold)
+        {
+            AnimateTo(left, working.Left, top, null);
+            snapped = true;
+        }
+        // 右边缘
+        else if (Math.Abs(right - working.Right) < EdgeSnapThreshold)
+        {
+            AnimateTo(left, working.Right - Width, top, null);
+            snapped = true;
+        }
+
+        // 顶部
+        if (Math.Abs(top - working.Top) < EdgeSnapThreshold)
+        {
+            AnimateTo(left, null, top, working.Top);
+            snapped = true;
+        }
+        // 底部
+        else if (Math.Abs(bottom - working.Bottom) < EdgeSnapThreshold)
+        {
+            AnimateTo(left, null, top, working.Bottom - Height);
+            snapped = true;
+        }
+    }
+
+    private void AnimateTo(double? fromLeft, double? toLeft, double? fromTop, double? toTop)
+    {
+        var duration = new Duration(TimeSpan.FromMilliseconds(150));
+
+        if (toLeft.HasValue)
+        {
+            var anim = new DoubleAnimation(toLeft.Value, duration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            BeginAnimation(Window.LeftProperty, anim);
+        }
+
+        if (toTop.HasValue)
+        {
+            var anim = new DoubleAnimation(toTop.Value, duration)
+            {
+                EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseOut }
+            };
+            BeginAnimation(Window.TopProperty, anim);
+        }
+    }
+
+    private void Header_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        if (e.ClickCount == 2) return;
+        DragMove();
+    }
+
+    private void PinBtn_Click(object sender, RoutedEventArgs e)
+    {
+        _isPinned = !_isPinned;
+        PinBtn.Content = _isPinned ? "📍" : "📌";
+        PinBtn.Foreground = _isPinned
+            ? new SolidColorBrush(Color.FromRgb(0x8B, 0x5C, 0xF6))
+            : new SolidColorBrush(Color.FromRgb(0xA5, 0xB4, 0xFC));
+    }
+
+    private void CloseBtn_Click(object sender, RoutedEventArgs e)
+    {
+        Hide();
+    }
+
+    // ========== 活动监控 ==========
 
     private void OnMyActivityChanged(ActivityState state)
     {
@@ -74,7 +184,7 @@ public partial class MainWindow : Window
         var app = state.ForegroundApp.ToLower();
         if (state.IsPlaying)
         {
-            StatusText.Text = $"耳朵里住着 {(string.IsNullOrEmpty(state.MusicArtist) ? "歌单" : state.MusicArtist)} 的 {(string.IsNullOrEmpty(state.MusicTitle) ? "音乐" : state.MusicTitle)} 🎧";
+            StatusText.Text = $"{(string.IsNullOrEmpty(state.MusicArtist) ? "歌单" : state.MusicArtist)} — {(string.IsNullOrEmpty(state.MusicTitle) ? "音乐" : state.MusicTitle)} 🎧";
             return;
         }
         if (!string.IsNullOrEmpty(state.BrowserTitle))
@@ -101,31 +211,36 @@ public partial class MainWindow : Window
         MyActivityEmpty.Visibility = Visibility.Collapsed;
 
         if (!string.IsNullOrEmpty(state.ForegroundApp))
-            MyActivityPanel.Children.Add(CreateRow("\U0001f4f1", "应用", state.ForegroundApp));
+            MyActivityPanel.Children.Add(CreateRow("📱", state.ForegroundApp));
         if (!string.IsNullOrEmpty(state.BrowserTitle))
-            MyActivityPanel.Children.Add(CreateRow("\U0001f310", "网页", state.BrowserTitle));
+            MyActivityPanel.Children.Add(CreateRow("🌐", state.BrowserTitle));
         if (state.IsPlaying)
         {
-            MyActivityPanel.Children.Add(CreateRow("\U0001f3b5", "音乐", $"{state.MusicArtist} — {state.MusicTitle}"));
-            MyActivityPanel.Children.Add(CreateRow("\U0001f4fb", "播放器", state.MusicApp));
+            MyActivityPanel.Children.Add(CreateRow("🎵", $"{state.MusicArtist} — {state.MusicTitle}"));
+            MyActivityPanel.Children.Add(CreateRow("📻", state.MusicApp));
         }
 
         if (MyActivityPanel.Children.Count == 0)
             MyActivityEmpty.Visibility = Visibility.Visible;
     }
 
-    private static StackPanel CreateRow(string icon, string label, string detail)
+    private static StackPanel CreateRow(string icon, string detail)
     {
-        var panel = new StackPanel
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 3, 0, 3) };
+        panel.Children.Add(new TextBlock { Text = icon, FontSize = 12, Width = 22, TextAlignment = TextAlignment.Center, VerticalAlignment = VerticalAlignment.Center });
+        panel.Children.Add(new TextBlock
         {
-            Orientation = Orientation.Horizontal,
-            Margin = new Thickness(0, 2, 0, 2)
-        };
-        panel.Children.Add(new TextBlock { Text = icon, FontSize = 11, Width = 18, TextAlignment = TextAlignment.Center });
-        panel.Children.Add(new TextBlock { Text = label, FontSize = 10, Foreground = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)), Margin = new Thickness(6, 0, 6, 0) });
-        panel.Children.Add(new TextBlock { Text = detail, FontSize = 12, Foreground = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)), TextTrimming = TextTrimming.CharacterEllipsis });
+            Text = detail,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xE2, 0xE8, 0xF0)),
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(4, 0, 0, 0)
+        });
         return panel;
     }
+
+    // ========== 好友活动 ==========
 
     private void OnPayloadReceived(ActivityPayload payload)
     {
@@ -143,9 +258,9 @@ public partial class MainWindow : Window
 
         if (!string.IsNullOrEmpty(payload.ForegroundApp))
         {
-            FriendActivityPanel.Children.Add(CreateRow("\U0001f4f1", "应用", payload.ForegroundApp));
+            FriendActivityPanel.Children.Add(CreateRow("📱", payload.ForegroundApp));
             if (payload.IsPlaying)
-                FriendActivityPanel.Children.Add(CreateRow("\U0001f3b5", "音乐", $"{payload.MusicArtist} — {payload.MusicTitle}"));
+                FriendActivityPanel.Children.Add(CreateRow("🎵", $"{payload.MusicArtist} — {payload.MusicTitle}"));
         }
         else
         {
@@ -169,7 +284,7 @@ public partial class MainWindow : Window
             return;
         }
         SyncBtn.IsEnabled = false;
-        SyncStatusLabel.Text = "正在连接...";
+        SyncStatusLabel.Text = "连接中...";
         SyncDot.Fill = new SolidColorBrush(Colors.Yellow);
         await _syncService.StartAsync();
         SyncBtn.IsEnabled = true;
@@ -184,30 +299,32 @@ public partial class MainWindow : Window
                 case ActivitySyncService.ConnectionStateEnum.Connected:
                     _isConnected = true;
                     _syncTimer.Start();
-                    SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
+                    SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
                     SyncStatusLabel.Text = "已连接";
                     SyncBtn.Content = "断开";
-                    SyncBtn.Background = new SolidColorBrush(Color.FromArgb(0x33, 0xEF, 0x44, 0x44));
+                    SyncBtn.Style = (Style)FindResource("DangerBtn");
                     FriendEmptyText.Text = "好友暂无活动";
                     FriendEmptyText.Visibility = Visibility.Visible;
                     break;
                 case ActivitySyncService.ConnectionStateEnum.Connecting:
                     SyncDot.Fill = new SolidColorBrush(Colors.Yellow);
-                    SyncStatusLabel.Text = "正在连接...";
+                    SyncStatusLabel.Text = "连接中...";
                     break;
                 default:
                     _isConnected = false;
                     _syncTimer.Stop();
-                    SyncDot.Fill = new SolidColorBrush(Colors.Gray);
+                    SyncDot.Fill = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80));
                     SyncStatusLabel.Text = "未连接";
-                    SyncBtn.Content = "连接好友";
-                    SyncBtn.Background = new SolidColorBrush(Color.FromArgb(0x33, 0xE9, 0x1E, 0x8C));
+                    SyncBtn.Content = "连接";
+                    SyncBtn.Style = (Style)FindResource("PrimaryBtn");
                     FriendEmptyText.Text = "好友暂未连接";
                     FriendEmptyText.Visibility = Visibility.Visible;
                     break;
             }
         });
     }
+
+    // ========== 屏幕共享 ==========
 
     private async void ScreenStartBtn_Click(object sender, RoutedEventArgs e)
     {
@@ -224,7 +341,7 @@ public partial class MainWindow : Window
     {
         ScreenStartBtn.IsEnabled = false;
         ScreenJoinBtn.IsEnabled = false;
-        ScreenStatusLabel.Text = "正在连接...";
+        ScreenStatusLabel.Text = "连接中...";
         ScreenDot.Fill = new SolidColorBrush(Colors.Yellow);
         await _shareService.StartAsync();
         ScreenStartBtn.IsEnabled = true;
@@ -245,7 +362,7 @@ public partial class MainWindow : Window
             switch (state)
             {
                 case ScreenShareService.ConnectionStateEnum.Connected:
-                    ScreenDot.Fill = new SolidColorBrush(Color.FromRgb(0x22, 0xC5, 0x5E));
+                    ScreenDot.Fill = new SolidColorBrush(Color.FromRgb(0x10, 0xB9, 0x81));
                     ScreenStatusLabel.Text = "已连接";
                     ScreenStartBtn.Visibility = Visibility.Collapsed;
                     ScreenJoinBtn.Visibility = Visibility.Collapsed;
@@ -255,10 +372,10 @@ public partial class MainWindow : Window
                     break;
                 case ScreenShareService.ConnectionStateEnum.Connecting:
                     ScreenDot.Fill = new SolidColorBrush(Colors.Yellow);
-                    ScreenStatusLabel.Text = "正在连接...";
+                    ScreenStatusLabel.Text = "连接中...";
                     break;
                 default:
-                    ScreenDot.Fill = new SolidColorBrush(Colors.Gray);
+                    ScreenDot.Fill = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x80));
                     ScreenStatusLabel.Text = "未连接";
                     ScreenStartBtn.Visibility = Visibility.Visible;
                     ScreenJoinBtn.Visibility = Visibility.Visible;
@@ -296,15 +413,18 @@ public partial class MainWindow : Window
         });
     }
 
+    // ========== 分享 ==========
+
     private void ShareBtn_Click(object sender, RoutedEventArgs e)
     {
         try
         {
             System.Windows.Clipboard.SetText(StatusText.Text);
+            var orig = ShareBtn.Content;
             ShareBtn.Content = "✅ 已复制";
             _ = Task.Delay(2000).ContinueWith(_ =>
             {
-                Dispatcher.Invoke(() => ShareBtn.Content = "💬 复制状态到剪贴板");
+                Dispatcher.Invoke(() => ShareBtn.Content = orig);
             });
         }
         catch { }

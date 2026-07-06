@@ -3,9 +3,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
-        <SolidColorBrush x:Key="BgBrush" Color="#1A1A2E"/>
-        <SolidColorBrush x:Key="PurpleBrush" Color="#7B2FBE"/>
-        <SolidColorBrush x:Key="PinkBrush" Color="#E91E8C"/>
-        <SolidColorBrush x:Key="BlueBrush" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="BgDarker" Color="#0A0612"/>
+        <SolidColorBrush x:Key="BgDark" Color="#0F0A1C"/>
+        <SolidColorBrush x:Key="BgCard" Color="#1A1030"/>
+        <SolidColorBrush x:Key="BorderSubtle" Color="#2D1F4E"/>
+        <SolidColorBrush x:Key="AccentPurple" Color="#8B5CF6"/>
+        <SolidColorBrush x:Key="AccentPink" Color="#EC4899"/>
+        <SolidColorBrush x:Key="AccentBlue" Color="#3B82F6"/>
+        <SolidColorBrush x:Key="AccentGreen" Color="#10B981"/>
     </Application.Resources>
 </Application>
